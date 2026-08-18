@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جستجوی مود مادرینث</title>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <style>
+        /* ... (همون استایل قبلی) ... */
+    </style>
+</head>
+<body>
+    <!-- ... (همون HTML قبلی) ... -->
+    
+    <script>
+        // تغییر: به جای /api/search از API مستقیم مادرینث استفاده کن
+        async function searchMods() {
+            const query = searchInput.value.trim();
+            if (!query) {
+                statusBox.innerHTML = `
+                    <div class="icon">⚠️</div>
+                    <div class="status-text error">لطفاً عبارت جستجو رو وارد کن</div>
+                `;
+                return;
+            }
+
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = '<span class="spinner"></span> جستجو...';
+
+            statusBox.innerHTML = `
+                <div class="icon">⏳</div>
+                <div class="status-text loading">در حال جستجو در مادرینث...</div>
+            `;
+            resultsContainer.innerHTML = '';
+
+            try {
+                // استفاده مستقیم از API مادرینث (با CORS proxy)
+                const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.modrinth.com/v2/search?query=' + query + '&limit=20')}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data && data.hits && data.hits.length > 0) {
+                    renderResults(data);
+                    statusBox.innerHTML = `
+                        <div class="icon">✅</div>
+                        <div class="status-text success">${data.hits.length} مود پیدا شد</div>
+                    `;
+                } else {
+                    statusBox.innerHTML = `
+                        <div class="icon">😕</div>
+                        <div class="status-text error">هیچ مودی پیدا نشد</div>
+                    `;
+                    resultsContainer.innerHTML = '';
+                }
+            } catch (error) {
+                statusBox.innerHTML = `
+                    <div class="icon">⚠️</div>
+                    <div class="status-text error">خطا: ${error.message}</div>
+                `;
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = '🔍 جستجو';
+            }
+        }
+
+        // برای نمایش نسخه‌ها هم باید از AllOrigins استفاده کنی
+        async function showVersions(slug) {
+            // ... مشابه
+            const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.modrinth.com/v2/project/' + slug + '/version')}`;
+            // ...
+        }
+    </script>
+</body>
+</html>
