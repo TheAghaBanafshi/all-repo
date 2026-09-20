@@ -1,3 +1,3 @@
 name: MONTAGEM TENTANA
-link: https://cdn.imgurl.ir/uploads/h78074_MONTAGEM_TENTANA.m4a
+link: https://cdn.jsdelivr.net/gh/TheAghaBanafshi/all-repo@main/admin/html/funkland/uploads/tentana.m4a
 date: 1735000000
