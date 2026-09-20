@@ -489,7 +489,6 @@ function showMainSite() {
   }, 1000);
 }
 
-// اگه تریلر رد شده
 if (skipTrailer) {
   trailer.style.display = 'none';
   mainSite.style.display = 'block';
@@ -509,13 +508,47 @@ if (skipTrailer) {
   }, 1500);
 }
 
+// ==================== پارس songs.txt ====================
+function parseSongsTxt(text) {
+  const songs = [];
+  // جدا کردن بلوک‌ها با ---
+  const blocks = text.split(/\n-{3,}\n/);
+  blocks.forEach((block, index) => {
+    const song = { added_at: 0, order: index };
+    block.split('\n').forEach(line => {
+      const m = line.match(/^\s*(name|link|date)\s*:\s*(.+?)\s*$/i);
+      if (m) {
+        const key = m[1].toLowerCase();
+        const val = m[2].trim();
+        if (key === 'name') song.name = val;
+        if (key === 'link') song.link = val;
+        if (key === 'date') song.added_at = parseInt(val) || 0;
+      }
+    });
+    if (song.name && song.link) {
+      songs.push(song);
+    }
+  });
+  return songs;
+}
+
 // ==================== لود آهنگ‌ها ====================
 async function loadSongs() {
   try {
-    const res = await fetch('songs.json?t=' + Date.now());
-    let songs = await res.json();
-    // مرتب‌سازی: جدیدترین اول
-    songs.sort((a, b) => (b.added_at || 0) - (a.added_at || 0));
+    const res = await fetch('songs.txt?t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    let songs = parseSongsTxt(text);
+
+    // مرتب‌سازی:
+    // اول بر اساس date (نزولی)، اگه date برابر بود، بر اساس ترتیب فایل (بالاتر = جدیدتر)
+    songs.sort((a, b) => {
+      if ((b.added_at || 0) !== (a.added_at || 0)) {
+        return (b.added_at || 0) - (a.added_at || 0);
+      }
+      return a.order - b.order;
+    });
+
     renderSongs(songs);
   } catch (err) {
     console.log('خطا در بارگذاری آهنگ‌ها:', err);
@@ -531,18 +564,19 @@ function renderSongs(songs) {
     return;
   }
 
-  // جدیدترین آهنگ = برچسب "جدید"
-  const newestTime = songs[0].added_at || 0;
-  const NEW_THRESHOLD = 7 * 24 * 60 * 60; // ۷ روز
+  // برچسب «جدید» برای آهنگ‌های ۷ روز اخیر
+  const NEW_THRESHOLD = 7 * 24 * 60 * 60;
   const now = Math.floor(Date.now() / 1000);
 
   grid.innerHTML = songs.map(song => {
     const isNew = song.added_at && (now - song.added_at) < NEW_THRESHOLD;
+    const safeName = escapeHtml(song.name);
+    const safeLink = escapeAttr(song.link);
     return `
-      <div class="song-card ${isNew ? 'is-new' : ''}" data-src="uploads/${song.file}">
+      <div class="song-card ${isNew ? 'is-new' : ''}" data-src="${safeLink}">
         <div class="song-title">
           ${isNew ? '<span class="new-badge">جدید</span>' : ''}
-          ${song.name}
+          ${safeName}
         </div>
         <div class="custom-player">
           <div class="player-main">
@@ -558,7 +592,7 @@ function renderSongs(songs) {
               <svg class="volume-icon" viewBox="0 0 24 24"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
               <input type="range" class="volume-slider" min="0" max="1" step="0.01" value="1">
             </div>
-            <a class="download-btn" href="uploads/${song.file}" download>
+            <a class="download-btn" href="${safeLink}" download target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
               دانلود
             </a>
@@ -568,10 +602,16 @@ function renderSongs(songs) {
     `;
   }).join('');
 
-  // وصل کردن پلیرها
   attachPlayers();
   bindHover();
 }
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function escapeAttr(str) { return escapeHtml(str); }
 
 function formatTime(sec) {
   if (isNaN(sec)) return '0:00';
@@ -590,8 +630,10 @@ function attachPlayers() {
     const volumeSlider = card.querySelector('.volume-slider');
     const volumeIcon = card.querySelector('.volume-icon');
 
-    const songAudio = new Audio(src);
+    const songAudio = new Audio();
     songAudio.preload = 'metadata';
+    songAudio.src = src;
+    songAudio.crossOrigin = 'anonymous';
     card._audio = songAudio;
     let isDragging = false;
 
@@ -606,7 +648,7 @@ function attachPlayers() {
             otherBtn.classList.remove('playing');
           }
         });
-        songAudio.play();
+        songAudio.play().catch(e => console.log('خطای پخش:', e));
         playBtn.classList.add('playing');
       } else {
         songAudio.pause();
@@ -629,6 +671,10 @@ function attachPlayers() {
       playBtn.classList.remove('playing');
       progressFill.style.width = '0%';
       timeDisplay.textContent = '0:00 / ' + formatTime(songAudio.duration);
+    });
+
+    songAudio.addEventListener('error', () => {
+      timeDisplay.textContent = 'خطا در لود ❌';
     });
 
     function seekFromEvent(e) {
